@@ -145,6 +145,34 @@
 
 <div class="note"><b>Consequence.</b> A migration applied from <code>nonprod</code> is applied for <code>dev</code> too. Images and stacks can be staged nonprod-first; migrations cannot.</div>
 
+<h2>When each pipeline runs</h2>
+<p>Nothing runs on a schedule. A pipeline runs when someone pushes a file it watches, or dispatches it by hand.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Workflow</th><th>Runs automatically when a push to an environment branch touches</th><th>By hand</th></tr></thead>
+  <tbody>
+    <tr><td><code>agent-egress-proxy</code></td><td><code>egress/**</code></td><td>yes</td></tr>
+    <tr><td><code>agent-platform</code></td><td><code>platform/**</code> or <code>agent-runner/**</code></td><td>yes</td></tr>
+    <tr><td><code>agent-control-plane</code></td><td><code>agent-control-plane/**</code></td><td>yes</td></tr>
+    <tr><td><code>agent-gateway</code></td><td><code>agent-gateway/**</code></td><td>yes</td></tr>
+    <tr><td><code>agent-secrets-roll</code></td><td><b>never</b> — there is no git event for a secret change</td><td>dispatch only</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Each workflow also watches its own file, so editing the YAML triggers it. A <b>pull request</b> runs only the check jobs — tests, typecheck, allowlist assertions, packaging. No build, no deploy, no credentials: the cheap way to find a mistake.</p>
+
+<h2>Trigger one on purpose</h2>
+<pre><code>gh workflow run agent-egress-proxy.yml  --ref nonprod
+gh workflow run agent-platform.yml      --ref nonprod
+gh workflow run agent-control-plane.yml --ref nonprod
+gh workflow run agent-secrets-roll.yml  --ref nonprod \
+    -f environment=nonprod -f services=both</code></pre>
+<p><code>--ref</code> picks the environment, not the registration: every workflow reads the ref it ran on. A dispatch runs the <b>full</b> pipeline, deploy included — it is not a dry run.</p>
+
+<div class="note"><b>Dispatch needs the default branch.</b> A <code>workflow_dispatch</code> workflow must exist on the repository's default branch or it cannot be dispatched at all — no Run button, and the CLI answers <code>404 … not found on the default branch</code>. Four of these declared <code>workflow_dispatch</code> while living only on the environment branches, so none could actually be run by hand until they were registered there.</div>
+
+<div class="note"><b>Never push to the default branch to test.</b> It carries its own copy of the application deploy workflow, triggered on pushes to it, which targets <b>production</b> — each branch holds an environment-specific copy of that same filename. A CI-only commit set off a full production deploy; it was harmless only because those services sit at zero desired count.</div>
+
 <h2>Testing it</h2>
 <p>Everything in the first group runs without AWS credentials, so it also runs on a pull request.</p>
 <pre><code># 40 allowlist assertions, no container needed
