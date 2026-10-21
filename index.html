@@ -1,0 +1,201 @@
+<title>Agent platform pipelines</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: single measured column; diagrams and tables break out to full width. */
+  :root{
+    --bg:#f6f7f6; --surface:#fff; --fg:#14181b; --muted:#5a646b;
+    --line:#d7dcdf; --accent:#1d5c8a; --gate:#b5790d; --ok:#2d6a4a;
+    --display:'Chivo','Helvetica Neue',Arial,sans-serif;
+    --body:'Source Sans 3',system-ui,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#101316; --surface:#171b1f; --fg:#e8ecee; --muted:#9aa5ac;
+    --line:#2b3238; --accent:#6fb0dc; --gate:#e0a93b; --ok:#6cc096; color-scheme:dark}}
+  :root[data-theme="dark"]{
+    --bg:#101316; --surface:#171b1f; --fg:#e8ecee; --muted:#9aa5ac;
+    --line:#2b3238; --accent:#6fb0dc; --gate:#e0a93b; --ok:#6cc096; color-scheme:dark}
+
+  body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.55;margin:0}
+  .wrap{max-width:52rem;margin:0 auto;padding-inline:20px;padding-block:48px 72px}
+  h1{font-family:var(--display);font-weight:700;font-size:clamp(1.85rem,5vw,2.5rem);
+     line-height:1.1;letter-spacing:-.02em;margin:0 0 .5rem;text-wrap:balance}
+  h2{font-family:var(--display);font-weight:600;font-size:1.12rem;letter-spacing:-.01em;
+     margin:2.75rem 0 .75rem;text-wrap:balance}
+  .lede{font-size:1.1rem;color:var(--muted);margin:0 0 .4rem;max-width:40rem}
+  .eyebrow{font-family:var(--mono);font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;
+     color:var(--muted);margin:0 0 1.5rem}
+  p{margin:0 0 .85rem;max-width:40rem}
+  code{font-family:var(--mono);font-size:.86em;background:var(--surface);
+     border:1px solid var(--line);border-radius:3px;padding:.08em .32em}
+  pre{font-family:var(--mono);font-size:.8rem;line-height:1.6;background:var(--surface);
+     border:1px solid var(--line);border-radius:6px;padding:.9rem 1rem;overflow-x:auto;margin:0 0 1rem}
+  pre code{background:none;border:0;padding:0;font-size:1em}
+  .scroll{overflow-x:auto;margin:0 0 1rem}
+  table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:34rem}
+  th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--mono);font-size:.68rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:500}
+  td code{white-space:nowrap}
+  figure{margin:0 0 1.25rem}
+  figure svg{display:block;width:100%;height:auto;max-width:100%;color:var(--fg)}
+  figcaption{font-size:.84rem;color:var(--muted);margin-top:.5rem;max-width:40rem}
+  ol{padding-left:1.3rem;max-width:40rem}
+  ol li{margin-bottom:.4rem}
+  .note{border-left:3px solid var(--gate);background:var(--surface);
+     padding:.7rem .9rem;margin:0 0 1rem;font-size:.92rem;max-width:40rem}
+  .note b{font-weight:600}
+  .gl{font-family:var(--mono);font-size:.82rem;color:var(--gate);font-weight:500}
+  a{color:var(--accent)}
+</style>
+
+<div class="wrap">
+
+<h1>Agent platform pipelines</h1>
+<p class="lede">Four parts of the agent platform used to be deployed by hand. All four now deploy from CI, on both environments.</p>
+<p class="eyebrow">Verified against AWS · 21 October 2026</p>
+
+<h2>What deploys, and when</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th>Workflow</th><th>Deploys</th><th>Triggered by</th></tr></thead>
+  <tbody>
+    <tr><td><code>agent-egress-proxy</code></td><td>Squid allowlist image → proxy service</td><td>push touching <code>egress/**</code></td></tr>
+    <tr><td><code>agent-platform</code></td><td>Platform stack: Lambda, state machines, Scheduler, CodeBuild</td><td>push touching <code>platform/**</code></td></tr>
+    <tr><td><code>agent-control-plane</code></td><td>Control-plane image <em>and</em> database migrations</td><td>push touching <code>agent-control-plane/**</code></td></tr>
+    <tr><td><code>agent-secrets-roll</code></td><td>Nothing new — restarts tasks so they re-read secrets</td><td>manual dispatch only</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Schema lands before the code</h2>
+<figure>
+<svg viewBox="0 0 720 150" role="img" aria-label="The control-plane pipeline runs four jobs in order: test, build image, migrate database, then deploy. Deploy depends on both build and migrate, so a failed migration stops the roll.">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--gate)"/>
+    </marker>
+  </defs>
+  <g font-family="IBM Plex Mono, monospace" font-size="12.5" text-anchor="middle">
+    <rect x="8"   y="46" width="132" height="40" rx="5" fill="none" stroke="currentColor" stroke-width="1.2"/>
+    <text x="74"  y="70">test</text>
+    <rect x="186" y="46" width="132" height="40" rx="5" fill="none" stroke="currentColor" stroke-width="1.2"/>
+    <text x="252" y="70">build image</text>
+    <rect x="364" y="46" width="132" height="40" rx="5" fill="none" stroke="var(--gate)" stroke-width="2"/>
+    <text x="430" y="70" fill="var(--gate)">migrate db</text>
+    <rect x="542" y="46" width="132" height="40" rx="5" fill="none" stroke="currentColor" stroke-width="1.2"/>
+    <text x="608" y="70">deploy</text>
+
+    <line x1="142" y1="66" x2="182" y2="66" stroke="currentColor" stroke-width="1.2" marker-end="url(#a)"/>
+    <line x1="320" y1="66" x2="360" y2="66" stroke="var(--gate)" stroke-width="2" marker-end="url(#ag)"/>
+    <line x1="498" y1="66" x2="538" y2="66" stroke="var(--gate)" stroke-width="2" marker-end="url(#ag)"/>
+
+    <path d="M252 42 C 252 14, 608 14, 608 42" fill="none" stroke="currentColor" stroke-width="1.2"
+          stroke-dasharray="4 3" marker-end="url(#a)"/>
+    <text x="430" y="12" font-size="11" fill="currentColor" opacity=".7">deploy also needs the image</text>
+    <text x="430" y="112" font-size="11.5" fill="var(--gate)">a failed migration stops the roll</text>
+    <text x="430" y="131" font-size="11" fill="currentColor" opacity=".65">no half-deploy: new code never meets an old schema</text>
+  </g>
+</svg>
+<figcaption><code>deploy</code> declares <code>needs: [build, migrate]</code>. That one line is what guarantees schema precedes code.</figcaption>
+</figure>
+
+<div class="note"><b>Why a ledger, not idempotent SQL.</b> The migration SQL is not re-runnable — one file has 32 DDL statements with only four <code>IF NOT EXISTS</code> guards. A ledger table records what has run, and only files absent from it execute. That is what makes a push-triggered migration safe.</div>
+
+<h2>The branch picks the environment</h2>
+<figure>
+<svg viewBox="0 0 720 196" role="img" aria-label="A push to the dev branch deploys the dev cluster; a push to the nonprod branch deploys the nonprod cluster. Both clusters share one Postgres database, so a migration applied from either branch applies to both.">  <defs>
+    <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+    </marker>
+    <marker id="bg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--gate)"/>
+    </marker>
+  </defs>
+
+  <g font-family="IBM Plex Mono, monospace" font-size="12.5" text-anchor="middle">
+    <rect x="18"  y="20" width="150" height="38" rx="5" fill="none" stroke="currentColor" stroke-width="1.2"/>
+    <text x="93"  y="43">push → dev</text>
+    <rect x="18"  y="104" width="150" height="38" rx="5" fill="none" stroke="currentColor" stroke-width="1.2"/>
+    <text x="93"  y="127">push → nonprod</text>
+
+    <rect x="286" y="20" width="166" height="38" rx="5" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+    <text x="369" y="43" fill="var(--accent)">dev cluster</text>
+    <rect x="286" y="104" width="166" height="38" rx="5" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+    <text x="369" y="127" fill="var(--accent)">nonprod cluster</text>
+
+    <rect x="556" y="62" width="150" height="38" rx="5" fill="none" stroke="var(--gate)" stroke-width="2"/>
+    <text x="631" y="85" fill="var(--gate)">one database</text>
+
+    <line x1="170" y1="39"  x2="282" y2="39"  stroke="currentColor" stroke-width="1.2" marker-end="url(#b)"/>
+    <line x1="170" y1="123" x2="282" y2="123" stroke="currentColor" stroke-width="1.2" marker-end="url(#b)"/>
+    <path d="M454 39 C 510 39, 510 74, 552 76"  fill="none" stroke="var(--gate)" stroke-width="2" marker-end="url(#bg)"/>
+    <path d="M454 123 C 510 123, 510 90, 552 88" fill="none" stroke="var(--gate)" stroke-width="2" marker-end="url(#bg)"/>
+
+    <text x="226" y="30"  font-size="11" fill="currentColor" opacity=".65">separate</text>
+    <text x="226" y="114" font-size="11" fill="currentColor" opacity=".65">separate</text>
+    <text x="631" y="122" font-size="11.5" fill="var(--gate)">shared, not per-environment</text>
+    <text x="360" y="176" font-size="11.5" fill="currentColor" opacity=".8">images and stacks stage safely — migrations do not</text>
+  </g>
+</svg>
+<figcaption>Cluster, service, hostname and secret all derive from the branch alone. The database does not: both environments point at one Postgres, differing only by schema.</figcaption>
+</figure>
+
+<div class="note"><b>Consequence.</b> A migration applied from <code>nonprod</code> is applied for <code>dev</code> too. Images and stacks can be staged nonprod-first; migrations cannot.</div>
+
+<h2>Testing it</h2>
+<p>Everything in the first group runs without AWS credentials, so it also runs on a pull request.</p>
+<pre><code># 40 allowlist assertions, no container needed
+bash test_squid_config.sh
+
+# platform suite; db tests skip unless a test DSN is set
+uv sync --locked &amp;&amp; uv run pytest -q
+
+# the Lambda zip builds with no credentials at all
+uv run python deploy.py --package-only
+
+# what the migrate job would do — read-only
+python migrations/runner.py status --secret &lt;env-secret&gt;
+
+actionlint .github/workflows/agent-*.yml</code></pre>
+
+<p>Then, in order:</p>
+<ol>
+  <li>Push to <code>nonprod</code>, confirm green, verify in AWS.</li>
+  <li>Push to <code>dev</code>, confirm green, verify in AWS.</li>
+  <li>Dispatch the secrets roll per environment when a secret value changed.</li>
+</ol>
+
+<h2>Verify the deploy, not the workflow</h2>
+<p>A green run is not proof. Check the thing it claims to have changed:</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Pipeline</th><th>What actually proves it</th></tr></thead>
+  <tbody>
+    <tr><td>Egress proxy</td><td>Service runs CI's image tag, and the docs endpoint that reaches PyPI <em>through</em> the proxy returns 200</td></tr>
+    <tr><td>Platform stack</td><td>Not the stack status — a no-op update looks identical. The Lambda's <code>LastModified</code> is what shows code moved</td></tr>
+    <tr><td>Migrations</td><td><code>migrate</code>'s start time precedes <code>deploy</code>'s in the run's job list</td></tr>
+    <tr><td>Secrets roll</td><td>Task definition revision <b>unchanged</b> while the deployment is new — that is what proves a restart shipped no code</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Six things that cost real time</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th>#</th><th>Symptom</th><th>Cause</th></tr></thead>
+  <tbody>
+    <tr><td class="gl">1</td><td><code>ProfileNotFound</code></td><td>Deploy scripts defaulted to a laptop-only AWS profile. CI has none — credentials arrive in the environment</td></tr>
+    <tr><td class="gl">2</td><td><code>429 Data limit exceeded</code></td><td>Anonymous public-registry pulls are capped. The base image failed before a layer built; authenticate to the public registry too</td></tr>
+    <tr><td class="gl">3</td><td>Opaque <code>sts</code> error</td><td>A job declaring an <code>environment:</code> changes the OIDC subject from <code>ref:…</code> to <code>environment:…</code>. Trust policies listing only branch refs reject it</td></tr>
+    <tr><td class="gl">4</td><td>Fails on dev, passes on nonprod</td><td>The gateway URL is read from the <em>hosting</em> stack's output, and only nonprod has a fallback. Nonprod passing does not prove dev will</td></tr>
+    <tr><td class="gl">5</td><td><code>404 … not found on the default branch</code></td><td>A <code>workflow_dispatch</code> workflow must exist on the default branch or it cannot be dispatched at all. Push triggers have no such rule</td></tr>
+    <tr><td class="gl">6</td><td>No review ever happens</td><td>No deployment environment has protection rules, so nothing is reviewer-gated — even where workflow comments imply otherwise</td></tr>
+  </tbody>
+</table>
+</div>
+<p style="color:var(--muted);font-size:.88rem;margin-top:1.5rem">Gotcha 4 is the argument for staging nonprod-first, and for its limit: one environment passing is evidence, not proof.</p>
+
+</div>
